@@ -22,34 +22,69 @@ SCOPES = ["user-read-currently-playing", "user-read-playback-state", "user-read-
           "user-read-playback-position", "user-top-read", "user-read-recently-played",  # listening history
           "user-library-modify", "user-library-read",  # library
           ]
-
-
 class Client:
     def __init__(self, logger: logging.Logger):
         """Initialize Spotify client with necessary permissions"""
         self.logger = logger
 
-        scope = "user-library-read,user-read-playback-state,user-modify-playback-state,user-read-currently-playing"
-
         try:
-            self.sp = spotipy.Spotify(auth_manager=SpotifyOAuth(
-                scope=scope,
+            self.auth_manager = SpotifyOAuth(
+                scope=",".join(SCOPES),
                 client_id=CLIENT_ID,
                 client_secret=CLIENT_SECRET,
-                redirect_uri=REDIRECT_URI))
-
-            self.auth_manager: SpotifyOAuth = self.sp.auth_manager
+                redirect_uri=REDIRECT_URI
+            )
+            
+            # Attempt to get a token from cache (if available)
+            token = self.auth_manager.get_cached_token()
+            
+            if token:
+                # If we already have a valid token in the cache, use it
+                self.sp = spotipy.Spotify(auth_manager=self.auth_manager)
+            else:
+                # Otherwise, you might not want to create `self.sp` yet
+                # until after the user logs in. We'll create it later in `handle_callback`.
+                self.sp = None
+            
             self.cache_handler: CacheFileHandler = self.auth_manager.cache_handler
+
         except Exception as e:
             self.logger.error(f"Failed to initialize Spotify client: {str(e)}")
             raise
 
         self.username = None
 
+    def get_auth_url(self) -> str:
+        """
+        Generates the Spotify login (authorization) URL.
+        The user must open this URL in a browser to grant access.
+        """
+        return self.auth_manager.get_authorize_url()
+
+    def handle_callback(self, code: str):
+        """
+        Once the user is redirected back to your 'redirect_uri'
+        with a 'code' query parameter, call this method to finish
+        the OAuth flow, obtain tokens, and create the Spotipy client.
+        """
+        try:
+            token_info = self.auth_manager.get_access_token(code, as_dict=False)
+            # Now we can create self.sp since we have fresh tokens.
+            self.sp = spotipy.Spotify(auth_manager=self.auth_manager)
+            self.logger.info("Successfully authenticated and obtained Spotify token.")
+        except Exception as e:
+            self.logger.error(f"Error completing OAuth flow: {str(e)}")
+            raise
+
     @utils.validate
     def set_username(self, device=None):
+        if not self.sp:
+            raise Exception("Spotify client not yet authenticated. Please complete login first.")
         self.username = self.sp.current_user()['display_name']
 
+
+
+    
     @utils.validate
     def search(self, query: str, qtype: str = 'track', limit=10, device=None):
         """
@@ -104,6 +139,21 @@ class Client:
                 playlist_info = utils.parse_playlist(playlist, self.username, detailed=True)
 
                 return playlist_info
+            case 'show':
+                show = self.sp.show(item_id)
+                self.logger.info(f"show info is {show}")
+                show_info = utils.parse_show(show, detailed=True)
+                return show_info
+            case 'episode':
+                episode = self.sp.episode(item_id)
+                self.logger.info(f"episode info is {episode}")
+                episode_info = utils.parse_episode(episode, detailed=True)
+                return episode_info
+            case 'audiobook':
+                audiobook = self.sp.audiobook(item_id)
+                self.logger.info(f"audiobook info is {audiobook}")
+                audiobook_info = utils.parse_audiobook(audiobook, detailed=True)
+                return audiobook_info
 
         raise ValueError(f"Unknown qtype {qtype}")
 
