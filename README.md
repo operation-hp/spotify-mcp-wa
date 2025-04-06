@@ -1,4 +1,51 @@
-# spotify-mcp MCP server
+
+# Spotify-MCP: MCP Server with OAuth Support
+
+This repository extends the Spotify-MCP server to support OAuth authentication with Spotify. When using the **WhatsApp-MCP client** (or any other MCP client) to access Spotify functionality, the client must first obtain an access token through the Spotify OAuth flow.
+
+## Key Features
+
+1. **Authorization URL Generation**: Direct the user to a Spotify login page, where they sign in with their Spotify account.
+2. **Callback Handling**: A mechanism to handle the OAuth authorization code returned by Spotify, exchanging it for an access token.
+3. **Google App Script + Google Sheet**: The chosen redirect URL can be hosted on Google Apps Script, which in turn logs the authorization code in a Google Sheet (or any desired storage). This helps keep track of user authorizations.
+   
+
+## New Tools
+
+Two new tools have been introduced to facilitate the OAuth flow:
+
+### 1. `get_url`
+Generates a Spotify authorization URL. The MCP client can display this URL to the user to begin the login process.
+
+### 2. `handle_callback`
+Exchanges the Spotify authorization code (obtained via the callback) for an access token.
+
+Below is a snippet of the `Auth` tool class:
+
+```python
+class Auth(ToolModel):
+    """
+    Manage Spotify OAuth authentication. Use this tool to get a login URL and handle authorization.
+    
+    - get_url: Generate a Spotify authorization URL to login.
+    - handle_callback: Process the authorization code after a successful login.
+    """
+    action: str = Field(
+        description="Action to perform: 'get_url' to generate a login URL, or 'handle_callback' to process the authorization code after login."
+    )
+    code: Optional[str] = Field(
+        default=None, 
+        description="The authorization code received from Spotify after successful login. Only required when action is 'handle_callback'."
+    )
+```
+
+
+The mcp-client (in this case whatsapp-nodeJS) will use *get_url* to display and use *handle_callback* to get the access token. 
+
+The Google App Script is used to handle redirect URL, showing a easy to type code for user to enter into the WhatsAPP. 
+
+
+Below is original repo readme from https://github.com/varunneal/spotify-mcp 
 
 MCP project to connect Claude with Spotify. Built on top of [spotipy-dev's API](https://github.com/spotipy-dev/spotipy/tree/2.24.0).
 
